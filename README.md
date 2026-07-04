@@ -4,9 +4,9 @@ Event ingestion and notification fanout: accepts structured events over REST, ma
 against subscriber filter rules, and delivers matching events to registered webhook endpoints
 with retries, dead-lettering, and a queryable delivery audit trail.
 
-> **Status — iteration 1.** Event ingestion is implemented end-to-end (durable, idempotent,
-> tested). Subscriptions, the fanout worker, and the audit endpoints are designed (schema and
-> stubs in place, marked `TODO(iteration 2)`) but not yet implemented.
+> **Status.** Core is complete: durable idempotent ingestion, subscription management with
+> validated filter rules, the retrying delivery worker, and the delivery audit API — all
+> covered by the test suite (webhook traffic fully mocked with respx).
 
 ## Setup
 
@@ -66,13 +66,15 @@ unchanged.
 
 ## API
 
-| Method | Path | Status | Notes |
-|---|---|---|---|
-| `GET` | `/health` | ✅ | Liveness; fast, no dependencies |
-| `POST` | `/api/v1/events` | ✅ | Ingest an event → `202 {event_id, duplicate}` |
-| `POST/GET/DELETE` | `/api/v1/subscriptions` | 🔜 iteration 2 | Manage webhook subscriptions without restart |
-| `GET` | `/api/v1/deliveries` | 🔜 iteration 2 | Delivery state per event / subscription |
-| `GET` | `/api/v1/deliveries/{id}/attempts` | 🔜 iteration 2 | Audit: timestamp, HTTP status, error per attempt |
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/health` | Liveness; fast, no dependencies |
+| `POST` | `/api/v1/events` | Ingest an event → `202 {event_id, duplicate}` |
+| `POST` | `/api/v1/subscriptions` | Register webhook URL + filter rules → `201`; invalid rules → `422` |
+| `GET` | `/api/v1/subscriptions` | List active subscriptions |
+| `DELETE` | `/api/v1/subscriptions/{id}` | Delete (soft) → `204`; unknown id → `404` |
+| `GET` | `/api/v1/deliveries?event_id=…&subscription_id=…` | Delivery state per event and/or subscription (at least one filter required) |
+| `GET` | `/api/v1/deliveries/{id}/attempts` | Audit: final state + timestamp, HTTP status, error for every attempt |
 
 **Ingestion contract.** Body: `{id?, type, source, payload}` where `payload` is any JSON object.
 `id` is an optional client-supplied idempotency key (max 128 chars); the server generates a UUID
@@ -80,9 +82,15 @@ when absent. Replaying an `id` returns `202` with `"duplicate": true` and does n
 the original event is kept even if the replayed body differs. `202` is returned only after the
 event and its fanout rows are committed. Every response carries an `X-Request-ID` header.
 
+**Webhook delivery contract.** Matching events are POSTed to the subscription URL as
+`{"event_id", "type", "source", "payload"}` with `X-Delivery-Id` / `X-Event-Id` headers.
+Any 2xx response acknowledges the delivery; anything else (including timeouts after
+`WEBHOOK_TIMEOUT_S`) triggers a retry. Deliveries are at-least-once — receivers should treat
+`event_id` as an idempotency key.
+
 ## Delivery guarantees
 
-**At-least-once per subscriber** (once fanout lands), by construction:
+**At-least-once per subscriber**, by construction:
 
 - The event and its pending `deliveries` rows commit in a single transaction before the `202`,
   so an accepted event cannot miss fanout.
@@ -101,8 +109,7 @@ remain here are: durable storage loss (single SQLite file — see tradeoffs) and
 
 ## Filter rule syntax
 
-*(Designed now, enforced in iteration 2 — invalid rules will be rejected with 422 at
-subscription creation.)*
+Rules are validated at subscription creation; invalid rules are rejected with `422`.
 
 ```json
 {
@@ -133,6 +140,7 @@ All via environment variables (see `app/core/config.py`):
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./data/events.db` | SQLAlchemy URL; Postgres is a value swap |
 | `LOG_LEVEL` | `INFO` | JSON log verbosity |
+| `WORKER_ENABLED` | `true` | `false` runs the API without the delivery poll loop |
 | `WEBHOOK_TIMEOUT_S` | `10` | Per-attempt webhook timeout |
 | `MAX_DELIVERY_ATTEMPTS` | `5` | Attempts before dead-lettering |
 | `BACKOFF_BASE_S` | `2` | Exponential backoff base |
