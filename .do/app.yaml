@@ -7,10 +7,14 @@ services:
   - name: api
     source_dir: /
     dockerfile_path: Dockerfile
-    github:
-      repo: praveen1718/event-fanout-service
+    # Public-repo git source: works without authorizing DO's GitHub app, but
+    # does NOT auto-deploy on push — redeploy with `doctl apps update`.
+    # To get deploy_on_push, authorize DO for the repo at
+    # https://cloud.digitalocean.com/apps/github/install and swap this block for:
+    #   github: {repo: praveen1718/event-fanout-service, branch: main, deploy_on_push: true}
+    git:
+      repo_clone_url: https://github.com/praveen1718/event-fanout-service.git
       branch: main
-      deploy_on_push: true
     http_port: 8080
     instance_count: 1
     instance_size_slug: basic-xxs
