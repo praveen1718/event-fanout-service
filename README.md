@@ -154,12 +154,14 @@ doctl apps create --spec .do/app.yaml    # first deploy (~5-10 min)
 doctl apps list                          # grab the app id + default URL
 ```
 
-The spec builds the repo's Dockerfile, health-checks `/health`, and redeploys on every push
-to `main` (`deploy_on_push`). Caveat: the SQLite database sits on the container's ephemeral
+The spec builds the repo's Dockerfile from the public git source and health-checks `/health`.
+Because it uses a plain git source (no DO GitHub-app authorization required), pushes do
+**not** auto-deploy — redeploy with `doctl apps update <APP_ID> --spec .do/app.yaml`, or
+switch to the `github:` source block (commented in the spec) after authorizing DO's GitHub
+app to get `deploy_on_push`. Caveat: the SQLite database sits on the container's ephemeral
 filesystem, so **data resets on each redeploy** — fine for a demo; the production fix is a
 DO Managed Postgres with `DATABASE_URL` set in the app spec (the repo layer needs no code
-change). First-time GitHub-sourced deploys require authorizing the DigitalOcean GitHub app
-for the repo (DO will prompt with a URL if it isn't).
+change).
 
 ## What we sacrifice for simplicity vs. what we'd harden next
 
