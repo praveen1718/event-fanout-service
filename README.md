@@ -146,6 +146,21 @@ All via environment variables (see `app/core/config.py`):
 | `BACKOFF_BASE_S` | `2` | Exponential backoff base |
 | `WORKER_POLL_INTERVAL_S` | `1` | Delivery worker tick interval |
 
+## Deployment (DigitalOcean App Platform)
+
+```bash
+doctl auth init                          # one-time: paste a DO API token
+doctl apps create --spec .do/app.yaml    # first deploy (~5-10 min)
+doctl apps list                          # grab the app id + default URL
+```
+
+The spec builds the repo's Dockerfile, health-checks `/health`, and redeploys on every push
+to `main` (`deploy_on_push`). Caveat: the SQLite database sits on the container's ephemeral
+filesystem, so **data resets on each redeploy** — fine for a demo; the production fix is a
+DO Managed Postgres with `DATABASE_URL` set in the app spec (the repo layer needs no code
+change). First-time GitHub-sourced deploys require authorizing the DigitalOcean GitHub app
+for the repo (DO will prompt with a URL if it isn't).
+
 ## What we sacrifice for simplicity vs. what we'd harden next
 
 **Sacrificed deliberately (fine for this exercise):**

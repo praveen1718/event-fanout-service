@@ -1,0 +1,24 @@
+# DigitalOcean App Platform spec.
+# First deploy:  doctl apps create --spec .do/app.yaml
+# Update:        doctl apps update <APP_ID> --spec .do/app.yaml
+name: event-fanout-service
+region: blr
+services:
+  - name: api
+    source_dir: /
+    dockerfile_path: Dockerfile
+    github:
+      repo: praveen1718/event-fanout-service
+      branch: main
+      deploy_on_push: true
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    health_check:
+      http_path: /health
+    envs:
+      - key: LOG_LEVEL
+        value: INFO
+      # NOTE: SQLite lives on the container's ephemeral filesystem — data is
+      # lost on every redeploy. Acceptable for this demo; the production path
+      # is a DO Managed Postgres and setting DATABASE_URL here instead.
