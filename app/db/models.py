@@ -8,7 +8,10 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 def _utcnow() -> datetime:
-    return datetime.now(UTC)
+    # Naive UTC everywhere: the sqlite driver drops tzinfo on write, so storing
+    # aware values would read back naive and poison comparisons. All stored
+    # timestamps are UTC by convention.
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _new_id() -> str:
@@ -28,7 +31,7 @@ class Event(Base):
     type: Mapped[str] = mapped_column(String(256), index=True)
     source: Mapped[str] = mapped_column(String(256), index=True)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), default=_utcnow)
 
 
 class Subscription(Base):
@@ -39,7 +42,7 @@ class Subscription(Base):
     # Declarative filter rules; syntax documented in the README.
     rules: Mapped[dict[str, Any]] = mapped_column(JSON)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), default=_utcnow)
 
 
 class DeliveryState(enum.StrEnum):
@@ -61,11 +64,11 @@ class Delivery(Base):
     )
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
     next_attempt_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, index=True
+        DateTime(), default=_utcnow, index=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+        DateTime(), default=_utcnow, onupdate=_utcnow
     )
 
 
@@ -76,6 +79,6 @@ class DeliveryAttempt(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=_new_id)
     delivery_id: Mapped[str] = mapped_column(ForeignKey("deliveries.id"), index=True)
-    attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    attempted_at: Mapped[datetime] = mapped_column(DateTime(), default=_utcnow)
     http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -24,6 +24,8 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     instead of the raw exception.
     """
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/test.db")
+    # tests drive worker ticks directly (process_due_deliveries_once) for determinism
+    monkeypatch.setenv("WORKER_ENABLED", "false")
     _reset_singletons()
     with TestClient(create_app(), raise_server_exceptions=False) as test_client:
         yield test_client

@@ -1,4 +1,5 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import APIRouter, FastAPI
 
@@ -9,15 +10,19 @@ from app.core.middleware import RequestIdMiddleware
 from app.db.engine import get_engine
 from app.db.models import Base
 from app.models.schemas import HealthResponse
+from app.services.delivery_worker import run_loop
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # No Alembic for this exercise; see README "what we sacrifice for simplicity".
     Base.metadata.create_all(get_engine())
-    # TODO(iteration 2 — fanout worker): start delivery_worker.run_loop() as an
-    # asyncio task here and cancel it cleanly on shutdown.
+    worker_task = asyncio.create_task(run_loop()) if get_settings().worker_enabled else None
     yield
+    if worker_task is not None:
+        worker_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await worker_task
 
 
 def create_app() -> FastAPI:

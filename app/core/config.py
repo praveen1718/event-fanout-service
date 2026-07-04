@@ -11,8 +11,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/events.db"
     log_level: str = "INFO"
 
-    # Delivery worker (used from iteration 2 onward; defined now so the
-    # contract is stable).
+    # Delivery worker. worker_enabled=False runs the API without the poll loop
+    # (tests drive ticks directly; also allows a split API/worker deployment).
+    worker_enabled: bool = True
     webhook_timeout_s: float = 10.0
     max_delivery_attempts: int = 5
     backoff_base_s: float = 2.0
